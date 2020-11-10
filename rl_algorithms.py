@@ -608,7 +608,7 @@ class GridWorld(object):
     
     Monte Carlo control to find the best policy ! See slide 202 of the lecture note for the algorithm. 
     """
-    def montecarlo_on_control(self, epsilon_init=0.05, decay_speed=0, decay_smooth=1, discount=0.9, learning_rate=1, threshold=0.0001, max_epoch=100, random_start=True, risky_start=False):
+    def montecarlo_on_control(self, epsilon_init=0.05, decay_speed=0, decay_smooth=1, discount=0.9, learning_rate=1, threshold=0.0001, max_epoch=100, random_start=True, risky_start=True):
         ## Slide 202 of the lecture notes for the algorithm ##
         
         rng = np.random.default_rng()
@@ -616,7 +616,10 @@ class GridWorld(object):
         Q = rng.uniform(-1, 1, size=(self.state_size, self.action_size))
 
         # initialize N, the number of occurence of each (s, a) couple
-        N = np.zeros((self.state_size, self.action_size), dtype=int)
+        #N = np.zeros((self.state_size, self.action_size), dtype=int)
+
+        # Let's store V episodes after episodes
+        value_functions = np.array([np.max(Q, axis=1)])
         
         # Initialisation
         epochs = 0
@@ -641,9 +644,11 @@ class GridWorld(object):
                     pass
                 else:
                     tabu += [(s, a)]
-                    N[s, a] += 1
+                    #N[s, a] += 1
                     G = sum([(discount**i) * r for i, r in enumerate(trace[(3*i+2)::3])])
-                    Q[s, a] = Q[s, a] + (learning_rate / N[s, a]) * (G - Q[s, a])
+                    Q[s, a] = Q[s, a] + (learning_rate) * (G - Q[s, a])
+
+            value_functions = np.concatenate((value_functions, [np.max(Q, axis=1)]), axis=0)
 
         # When the loop is finished, fill in the optimal policy
         optimal_policy = np.zeros((self.state_size, self.action_size)) # Initialisation
@@ -653,14 +658,14 @@ class GridWorld(object):
             # The action that maximises the Q value gets probability 1
             optimal_policy[state_idx, np.argmax(Q[state_idx, :])] = 1 
 
-        return Q, optimal_policy, epochs, rewards
+        return Q, optimal_policy, epochs, rewards, value_functions
     
     """
         sarsa_on_td_control(self, epsilon=0.05, discount=0.9, learning_rate=0.3, threshold=0.0001, max_epoch=100)
     
     SARSA algo : on-policy Temporal Difference learning. See slide 212 for the algo !
     """
-    def sarsa_on_td_control(self, epsilon_init=0.05, decay_speed=0, decay_smooth=1, discount=0.9, learning_rate=0.3, threshold=0.0001, max_epoch=100):
+    def sarsa_on_td_control(self, epsilon_init=0.05, decay_speed=0, decay_smooth=1, discount=0.9, learning_rate=0.3, threshold=0.0001, max_epoch=100, random_start=True, risky_start=True):
         ## Slide 212 of the lecture notes for the algorithm ##
         
         rng = np.random.default_rng()
@@ -670,6 +675,9 @@ class GridWorld(object):
         # because of the update rule, Q[absorbing_state, :] must be set to 0
         abs_idxs = np.where(self.absorbing[0] == 1)[0]
         Q[abs_idxs, :] = np.zeros(Q.shape[1])
+
+        # Let's store V episodes after episodes
+        value_functions = np.array([np.max(Q, axis=1)])
         
         # Initialisation
         epochs = 0
@@ -684,7 +692,7 @@ class GridWorld(object):
             epsilon = (decay_smooth / (decay_smooth + decay_speed * epochs)) * epsilon_init
 
             # initialise state and take first action
-            s = self.initial_state(rng, random=True)
+            s = self.initial_state(rng, random=random_start, risk=risky_start)
             a = self.action_choice(s, Q, rng, epsilon)
 
             # sum of rewards in the episode (for plots)
@@ -714,6 +722,7 @@ class GridWorld(object):
                 keep_runing = (self.absorbing[0, s] == 0)
 
             rewards += [R]
+            value_functions = np.concatenate((value_functions, [np.max(Q, axis=1)]), axis=0)
 
         # When the loop is finished, fill in the optimal policy
         optimal_policy = np.zeros((self.state_size, self.action_size)) # Initialisation
@@ -723,6 +732,6 @@ class GridWorld(object):
             # The action that maximises the Q value gets probability 1
             optimal_policy[state_idx, np.argmax(Q[state_idx, :])] = 1 
 
-        return Q, optimal_policy, epochs, rewards
+        return Q, optimal_policy, epochs, rewards, value_functions
     
 ###########################################         
